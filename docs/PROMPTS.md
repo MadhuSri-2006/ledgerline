@@ -71,3 +71,19 @@ Designed the Prisma database schema for LedgerLine covering Users, Accounts, Tra
 - Formatted schema with `npx prisma format`.
 - *Refinement based on student review*: Removed redundant indexes that duplicated unique constraints (`email`, `accountNumber`, `reference`, `(userId, key)`). Clarified that syntactic schema validation is not a substitute for live PostgreSQL connection testing (scheduled for Stage 3).
 
+---
+
+## Log Entry 3: Live Database Connection & Non-Destructive Verification
+
+- **Date**: 2026-11-05
+- **Tool**: Antigravity (Google DeepMind) / Claude
+- **Stage**: Stage 3 (Part 1) — Neon PostgreSQL Connectivity & Credential Security
+
+### Actions & Security Verification
+1. **Git Protection Verified**: Verified via `git check-ignore -v backend/.env` that `.env` is ignored by rule `.gitignore:7`. `git status` confirmed zero credentials tracked.
+2. **Prisma Client Generated**: Generated `@prisma/client` engine binaries cleanly.
+3. **Smoke Test Executed**: Executed [`backend/prisma/test_connection.js`](file:///c:/Users/madhu/Documents/projects/ledgerline/backend/prisma/test_connection.js) using Prisma's `$queryRaw` to test connectivity without modifying schema or running migrations:
+   - Output: `SUCCESS: Connected to PostgreSQL database!`
+   - Server: `PostgreSQL 18.6 on aarch64-unknown-linux-gnu` (Neon Hosted PostgreSQL)
+4. **No Migrations / Seeding Run Yet**: Paused for student review before executing schema migrations and demo data seeding.
+
