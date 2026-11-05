@@ -39,4 +39,4 @@ The AI proposed a standard layered Express + PostgreSQL architecture. However, t
    - *Clarification*: Admin creates demo accounts and users; Account Holders operate only on their own accounts; Auditors possess system-wide read-only access.
 
 ### Status & Verification
-The architecture was revised and approved with these corrections. Stage 1 directory structure and documentation files initialized.
+The architecture was revised and approved with these corrections. Stage 1 directory structure and documentation files initialized and committed in Git (`commit 75a723b`).
