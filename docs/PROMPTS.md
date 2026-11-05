@@ -77,13 +77,36 @@ Designed the Prisma database schema for LedgerLine covering Users, Accounts, Tra
 
 - **Date**: 2026-11-05
 - **Tool**: Antigravity (Google DeepMind) / Claude
-- **Stage**: Stage 3 (Part 1) — Neon PostgreSQL Connectivity & Credential Security
+- **Stage**: Stage 3 — Neon PostgreSQL Setup, Migrations & Seed Verification
 
 ### Actions & Security Verification
-1. **Git Protection Verified**: Verified via `git check-ignore -v backend/.env` that `.env` is ignored by rule `.gitignore:7`. `git status` confirmed zero credentials tracked.
-2. **Prisma Client Generated**: Generated `@prisma/client` engine binaries cleanly.
-3. **Smoke Test Executed**: Executed [`backend/prisma/test_connection.js`](file:///c:/Users/madhu/Documents/projects/ledgerline/backend/prisma/test_connection.js) using Prisma's `$queryRaw` to test connectivity without modifying schema or running migrations:
+1. **Git Protection Verified**: Confirmed via `git check-ignore -v backend/.env` that `.env` is ignored by rule `.gitignore:7`. `git status` confirmed zero credentials tracked.
+2. **Smoke Test Executed**: Tested connectivity using Prisma `$queryRaw` without modifying schema or data:
    - Output: `SUCCESS: Connected to PostgreSQL database!`
    - Server: `PostgreSQL 18.6 on aarch64-unknown-linux-gnu` (Neon Hosted PostgreSQL)
-4. **No Migrations / Seeding Run Yet**: Paused for student review before executing schema migrations and demo data seeding.
+3. **Prisma Migration Applied**:
+   - Command: `npx prisma migrate dev --name init`
+   - Generated migration SQL: `backend/prisma/migrations/20261105143315_init/migration.sql`
+   - Created PostgreSQL tables: `User`, `Account`, `TransactionRecord`, `LedgerEntry`, `IdempotencyKey`, `AuditLog`.
+4. **Demo Data Seeded**:
+   - Command: `npm run seed`
+   - Seeded demo users with 10-round bcrypt password hashing:
+     - Admin: `admin@ledgerline.internal` (`ADMIN`)
+     - Auditor: `auditor@ledgerline.internal` (`AUDITOR`)
+     - Alice: `alice@ledgerline.internal` (`ACCOUNT_HOLDER`)
+     - Bob: `bob@ledgerline.internal` (`ACCOUNT_HOLDER`)
+   - Seeded system accounts:
+     - `SYS-CLEARING-001` (`SYSTEM_CLEARING`, balance: `-1500.00 INR`, `userId: null`)
+     - Alice (`ACC-ALICE-001`, balance: `1000.00 INR`)
+     - Bob (`ACC-BOB-001`, balance: `500.00 INR`)
+   - Double-entry initial funding: 2 `DEPOSIT` transactions creating 4 balanced `LedgerEntry` rows.
+5. **Live Seed Verification Results**:
+   - Command: `npm run verify:seed`
+   - Result: All 4 bcrypt passwords matched.
+   - Result: Stored balance vs. ledger derivation:
+     - `ACC-ALICE-001`: Stored = 1000.00, Reconciled = 1000.00 (`MATCH`)
+     - `ACC-BOB-001`: Stored = 500.00, Reconciled = 500.00 (`MATCH`)
+     - `SYS-CLEARING-001`: Stored = -1500.00, Reconciled = -1500.00 (`MATCH`)
+   - System conservation: Total Debits (1500.00 INR) == Total Credits (1500.00 INR).
+   - Audit trail: Initial deposit and seed events logged.
 
