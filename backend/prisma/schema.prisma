@@ -1,0 +1,194 @@
+// LedgerLine — Prisma Database Schema
+// Database: PostgreSQL
+// Focus: Strict Double-Entry Accounting, Financial Integrity, Concurrency, and Auditability
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------
+// ENUMS
+// -------------------------------------------------------------
+
+enum Role {
+  ADMIN // System administrator: manages users and accounts, views all audits
+  ACCOUNT_HOLDER // Standard banking user: manages and moves funds strictly in own accounts
+  AUDITOR // Read-only compliance user: views accounts, ledgers, and audit logs system-wide
+}
+
+enum AccountType {
+  STANDARD // Customer accounts (Checking, Savings)
+  SYSTEM_CLEARING // Counter-balancing internal settlement account for external deposits & withdrawals
+}
+
+enum AccountStatus {
+  ACTIVE
+  FROZEN
+  CLOSED
+}
+
+enum TransactionType {
+  DEPOSIT // External funds entering customer account (System Clearing DEBIT -> Customer CREDIT)
+  WITHDRAWAL // External funds leaving customer account (Customer DEBIT -> System Clearing CREDIT)
+  TRANSFER // Internal transfer between two customer accounts (Sender DEBIT -> Receiver CREDIT)
+}
+
+enum TransactionStatus {
+  COMPLETED
+  FAILED
+}
+
+enum EntryType {
+  DEBIT // Decreases standard asset/customer balance; increases clearing asset
+  CREDIT // Increases standard asset/customer balance; decreases clearing asset
+}
+
+enum IdempotencyStatus {
+  PENDING // Request is currently in flight
+  RESOLVED // Request succeeded and cached response is available
+  FAILED // Request failed and was rolled back
+}
+
+enum AuditStatus {
+  SUCCESS // Operation cleared successfully
+  DECLINED // Operation refused by business logic (e.g. insufficient funds, BOLA violation)
+  ERROR // Unexpected system error
+}
+
+// -------------------------------------------------------------
+// MODELS
+// -------------------------------------------------------------
+
+/// Represents human actors in the system (Admin, Account Holder, Auditor).
+/// Sensitive credentials (passwords) are strictly stored as bcrypt hashes.
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  passwordHash String
+  fullName     String
+  role         Role     @default(ACCOUNT_HOLDER)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // Relationships
+  accounts              Account[]
+  idempotencyKeys       IdempotencyKey[]
+  auditLogs             AuditLog[]
+  initiatedTransactions TransactionRecord[]
+
+  @@index([email])
+}
+
+/// Represents a financial account.
+/// Balances use PostgreSQL DECIMAL(14,2) to eliminate floating-point drift.
+model Account {
+  id            String        @id @default(uuid()) @db.Uuid
+  accountNumber String        @unique
+  userId        String?       @db.Uuid // Nullable for SYSTEM_CLEARING accounts
+  type          AccountType   @default(STANDARD)
+  balance       Decimal       @default(0.00) @db.Decimal(14, 2)
+  currency      String        @default("INR")
+  status        AccountStatus @default(ACTIVE)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  // Relationships
+  user          User?         @relation(fields: [userId], references: [id], onDelete: Restrict)
+  ledgerEntries LedgerEntry[]
+  auditLogs     AuditLog[]
+
+  @@index([userId])
+  @@index([accountNumber])
+}
+
+/// Represents a business-level financial event (Transfer, Deposit, or Withdrawal).
+/// A single transaction contains multiple balancing LedgerEntries.
+model TransactionRecord {
+  id            String            @id @default(uuid()) @db.Uuid
+  reference     String            @unique // Human-readable reference e.g. "TXN-20261105-001"
+  type          TransactionType
+  amount        Decimal           @db.Decimal(14, 2)
+  status        TransactionStatus @default(COMPLETED)
+  description   String?
+  initiatedById String            @db.Uuid
+  createdAt     DateTime          @default(now())
+
+  // Relationships
+  initiatedBy   User          @relation(fields: [initiatedById], references: [id], onDelete: Restrict)
+  ledgerEntries LedgerEntry[]
+  auditLogs     AuditLog[]
+
+  @@index([reference])
+  @@index([initiatedById])
+}
+
+/// Immutable double-entry ledger.
+/// Internal transfers create 2 balancing entries (1 DEBIT, 1 CREDIT).
+/// Sum of debits and credits across the system for any transaction must net to zero.
+model LedgerEntry {
+  id            String    @id @default(uuid()) @db.Uuid
+  transactionId String    @db.Uuid
+  accountId     String    @db.Uuid
+  entryType     EntryType
+  amount        Decimal   @db.Decimal(14, 2)
+  balanceAfter  Decimal   @db.Decimal(14, 2) // Snapshot of account balance immediately after entry
+  createdAt     DateTime  @default(now())
+
+  // Relationships
+  transaction TransactionRecord @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  account     Account           @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([accountId])
+  @@index([transactionId])
+}
+
+/// Guarantees that repeating a money-moving request never executes twice.
+/// Enforced by a database-level composite unique constraint on (userId, key).
+model IdempotencyKey {
+  id           String            @id @default(uuid()) @db.Uuid
+  key          String // UUID or client-provided unique idempotency key
+  userId       String            @db.Uuid
+  requestPath  String // e.g. "/api/transactions/transfer"
+  requestHash  String // SHA-256 hash of payload to prevent payload tampering under same key
+  status       IdempotencyStatus @default(PENDING)
+  statusCode   Int? // Cached HTTP status code (e.g. 200, 400)
+  responseBody Json? // Cached JSON response returned on retries
+  createdAt    DateTime          @default(now())
+  expiresAt    DateTime // TTL for key expiration (e.g. 24-48 hours)
+
+  // Relationships
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key]) // Database-enforced uniqueness prevents concurrent race condition duplicates
+  @@index([userId, key])
+}
+
+/// Immutable audit trail recording every security, authentication, and transaction event.
+/// Refused attempts (e.g. insufficient funds, BOLA violations) are written independently
+/// so they survive database rollbacks.
+model AuditLog {
+  id             String      @id @default(uuid()) @db.Uuid
+  timestamp      DateTime    @default(now())
+  userId         String?     @db.Uuid // Actor initiating the action
+  accountId      String?     @db.Uuid // Target account (if applicable)
+  transactionId  String?     @db.Uuid // Associated transaction (if created)
+  action         String // e.g. "TRANSFER_ATTEMPT", "UNAUTHORIZED_DEBIT_ATTEMPT", "INSUFFICIENT_FUNDS"
+  status         AuditStatus
+  reason         String? // Plain English explanation for declined attempts
+  runningBalance Decimal?    @db.Decimal(14, 2) // Account balance at the time of event
+  metadata       Json? // Additional context (IP, User-Agent, parameters)
+
+  // Relationships
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
+  account     Account?           @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  transaction TransactionRecord? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([accountId])
+  @@index([timestamp])
+}
