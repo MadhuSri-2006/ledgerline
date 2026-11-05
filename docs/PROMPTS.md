@@ -110,3 +110,29 @@ Designed the Prisma database schema for LedgerLine covering Users, Accounts, Tra
    - System conservation: Total Debits (1500.00 INR) == Total Credits (1500.00 INR).
    - Audit trail: Initial deposit and seed events logged.
 
+---
+
+## Log Entry 4: Authentication & Role-Based Authorization Implementation
+
+- **Date**: 2026-11-05
+- **Tool**: Antigravity (Google DeepMind) / Claude
+- **Stage**: Stage 4 — Authentication & Role-Based Authorization
+
+### Prompt Summary
+Implement login endpoint with bcrypt verification, signed JWT issuance, auth middleware, role-based access control (`ADMIN`, `ACCOUNT_HOLDER`, `AUDITOR`), account ownership restrictions (BOLA/IDOR prevention), and automated tests.
+
+### Implementation Details
+1. **Cryptographically Signed JWTs**: Created `src/utils/jwt.js` using `jsonwebtoken` with `HS256` and minimal non-sensitive public claims (`userId`, `email`, `role`).
+2. **Auth Middleware**: Created `src/middleware/authMiddleware.js` verifying Bearer tokens, token expiration, and database user presence.
+3. **Role Middleware (RBAC)**: Created `src/middleware/roleMiddleware.js` enforcing server-side role permissions.
+4. **Account Ownership (BOLA Prevention)**: Created `src/middleware/ownershipMiddleware.js`. Blocks cross-user account access with `403 Forbidden` and logs security refusal to `AuditLog`. Restricts `AUDITOR` to read-only methods (`GET`).
+5. **Controllers & Routes**: Implemented `authController.js`, `adminController.js`, `authRoutes.js`, `adminRoutes.js`, and `accountRoutes.js`.
+6. **API Documentation**: Documented auth endpoints in `docs/API.md`.
+
+### Actual Issue Encountered & Solution
+- **Issue**: Initial test run failed with `Exceeded timeout of 5000 ms for a hook` in `beforeAll`.
+- **Root Cause**: Neon PostgreSQL is an AWS cloud database; 4 sequential logins requiring bcrypt password hashing (10 salt rounds) and network roundtrips took ~9 seconds, exceeding Jest's default 5-second timeout.
+- **Resolution**: Created `jest.config.js` with `testTimeout: 30000` and explicit `jest.setTimeout(30000)` in `tests/auth.test.js`.
+- **Verification**: Re-executed test suite. All 17 automated tests passed cleanly.
+
+
