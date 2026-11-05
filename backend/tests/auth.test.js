@@ -99,6 +99,27 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
 
       expect(res.status).toBe(400);
     });
+
+    it('should sanitize failed login audit logs and never persist raw sensitive email inputs (CWE-532 fix)', async () => {
+      const sensitivePasswordLikeInput = 'P@ssw0rdAccidentallyTypedInEmailField!';
+
+      const res = await request(app)
+        .post('/api/auth/login')
+        .send({ email: sensitivePasswordLikeInput, password: 'SomePassword123!' });
+
+      expect(res.status).toBe(401);
+
+      // Verify that the sensitive string was NOT stored anywhere in the AuditLog record
+      const auditLog = await prisma.auditLog.findFirst({
+        where: { action: 'LOGIN_FAILED' },
+        orderBy: { timestamp: 'desc' },
+      });
+
+      expect(auditLog).not.toBeNull();
+      expect(auditLog.reason).toBe('Failed login attempt: Account does not exist.');
+      expect(auditLog.reason).not.toContain(sensitivePasswordLikeInput);
+      expect(JSON.stringify(auditLog.metadata || {})).not.toContain(sensitivePasswordLikeInput);
+    });
   });
 
   // -------------------------------------------------------------

@@ -130,9 +130,13 @@ Implement login endpoint with bcrypt verification, signed JWT issuance, auth mid
 6. **API Documentation**: Documented auth endpoints in `docs/API.md`.
 
 ### Actual Issue Encountered & Solution
-- **Issue**: Initial test run failed with `Exceeded timeout of 5000 ms for a hook` in `beforeAll`.
-- **Root Cause**: Neon PostgreSQL is an AWS cloud database; 4 sequential logins requiring bcrypt password hashing (10 salt rounds) and network roundtrips took ~9 seconds, exceeding Jest's default 5-second timeout.
-- **Resolution**: Created `jest.config.js` with `testTimeout: 30000` and explicit `jest.setTimeout(30000)` in `tests/auth.test.js`.
-- **Verification**: Re-executed test suite. All 17 automated tests passed cleanly.
+- **Issue 1 (Test Timeout)**: Initial test run failed with `Exceeded timeout of 5000 ms for a hook` in `beforeAll`.
+  - *Root Cause*: Neon PostgreSQL is an AWS cloud database; 4 sequential logins requiring bcrypt password hashing (10 salt rounds) and network roundtrips took ~9 seconds, exceeding Jest's default 5-second timeout.
+  - *Resolution*: Created `jest.config.js` with `testTimeout: 30000` and explicit `jest.setTimeout(30000)` in `tests/auth.test.js`.
+- **Issue 2 (CWE-532 Sensitive Log Leak)**: Security review identified that `authController.js` logged raw `trimmedEmail` in `AuditLog.reason` on non-existent account logins (`Failed login attempt for non-existent email: ${trimmedEmail}`).
+  - *Risk*: Users who accidentally type their password into the username field would have plaintext passwords persisted in the immutable audit log.
+  - *Resolution*: Replaced raw input interpolation with a constant generic reason: `'Failed login attempt: Account does not exist.'`.
+  - *Regression Test*: Added test asserting that submitting a password string into the email field does not leak into `AuditLog.reason` or `metadata`.
+- **Verification**: Re-executed test suite. All 18 automated tests passed cleanly.
 
 

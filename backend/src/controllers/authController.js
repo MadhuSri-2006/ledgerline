@@ -21,12 +21,12 @@ async function login(req, res) {
     });
 
     if (!user) {
-      // Record failed login attempt in audit trail
+      // Record failed login attempt in audit trail (sanitize reason to prevent CWE-532 password leaks)
       await prisma.auditLog.create({
         data: {
           action: 'LOGIN_FAILED',
           status: 'DECLINED',
-          reason: `Failed login attempt for non-existent email: ${trimmedEmail}`,
+          reason: 'Failed login attempt: Account does not exist.',
           metadata: { ip: req.ip, userAgent: req.headers['user-agent'] },
         },
       });
