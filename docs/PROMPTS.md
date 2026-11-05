@@ -69,4 +69,5 @@ Designed the Prisma database schema for LedgerLine covering Users, Accounts, Tra
 - Created `backend/.env` with placeholder `DATABASE_URL`.
 - Re-executed `npx prisma validate`: Output: `The schema at prisma\schema.prisma is valid 🚀`.
 - Formatted schema with `npx prisma format`.
+- *Refinement based on student review*: Removed redundant indexes that duplicated unique constraints (`email`, `accountNumber`, `reference`, `(userId, key)`). Clarified that syntactic schema validation is not a substitute for live PostgreSQL connection testing (scheduled for Stage 3).
 

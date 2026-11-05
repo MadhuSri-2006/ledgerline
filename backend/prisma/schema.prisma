@@ -80,8 +80,6 @@ model User {
   idempotencyKeys       IdempotencyKey[]
   auditLogs             AuditLog[]
   initiatedTransactions TransactionRecord[]
-
-  @@index([email])
 }
 
 /// Represents a financial account.
@@ -103,7 +101,6 @@ model Account {
   auditLogs     AuditLog[]
 
   @@index([userId])
-  @@index([accountNumber])
 }
 
 /// Represents a business-level financial event (Transfer, Deposit, or Withdrawal).
@@ -123,7 +120,6 @@ model TransactionRecord {
   ledgerEntries LedgerEntry[]
   auditLogs     AuditLog[]
 
-  @@index([reference])
   @@index([initiatedById])
 }
 
@@ -165,7 +161,6 @@ model IdempotencyKey {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, key]) // Database-enforced uniqueness prevents concurrent race condition duplicates
-  @@index([userId, key])
 }
 
 /// Immutable audit trail recording every security, authentication, and transaction event.
