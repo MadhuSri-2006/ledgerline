@@ -3,10 +3,13 @@
 
 const prisma = require('../config/db');
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /**
  * Middleware ensuring that an Account Holder can only access accounts they own.
  * Admins can access any account.
  * Auditors have read-only access (GET requests only).
+ * SYSTEM_CLEARING accounts are strictly prohibited from being accessed by Account Holders.
  * 
  * @param {string} source - 'params' or 'body'
  * @param {string} fieldName - property name containing the accountId (default 'id' or 'accountId')
@@ -20,6 +23,10 @@ function requireAccountOwnership(source = 'params', fieldName = 'id') {
         return res.status(400).json({ error: `Bad Request: Missing account identifier in ${source}.${fieldName}` });
       }
 
+      if (!UUID_REGEX.test(accountId)) {
+        return res.status(400).json({ error: 'Bad Request: Invalid account ID format. Expected a valid UUID.' });
+      }
+
       const account = await prisma.account.findUnique({
         where: { id: accountId },
         include: { user: true },
@@ -27,6 +34,23 @@ function requireAccountOwnership(source = 'params', fieldName = 'id') {
 
       if (!account) {
         return res.status(404).json({ error: 'Account not found.' });
+      }
+
+      // Explicit protection: SYSTEM_CLEARING accounts cannot be accessed by normal Account Holders
+      if (account.type === 'SYSTEM_CLEARING' && req.user.role === 'ACCOUNT_HOLDER') {
+        await prisma.auditLog.create({
+          data: {
+            userId: req.user.id,
+            accountId: account.id,
+            action: 'CLEARING_ACCOUNT_ACCESS_PROHIBITED',
+            status: 'DECLINED',
+            reason: 'Account Holders are strictly prohibited from accessing SYSTEM_CLEARING accounts.',
+            runningBalance: account.balance,
+          },
+        });
+        return res.status(403).json({
+          error: 'Forbidden: Access to system clearing account is prohibited.',
+        });
       }
 
       // 1. ADMIN has full administrative oversight

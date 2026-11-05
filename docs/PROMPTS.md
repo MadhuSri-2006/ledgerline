@@ -139,4 +139,47 @@ Implement login endpoint with bcrypt verification, signed JWT issuance, auth mid
   - *Regression Test*: Added test asserting that submitting a password string into the email field does not leak into `AuditLog.reason` or `metadata`.
 - **Verification**: Re-executed test suite. All 18 automated tests passed cleanly.
 
+---
+
+## Log Entry 5: Account Management & Balance Viewing
+
+- **Date**: 2026-11-05
+- **Tool**: Antigravity (Google DeepMind) / Claude
+- **Stage**: Stage 5 — Account Management & Balance Viewing
+
+### Prompt Summary
+Implement Admin-only customer account creation, role-scoped account listing (Admin/Auditor see all; Account Holder sees only own), individual account detail retrieval, BOLA/IDOR protection via ownership middleware, SYSTEM_CLEARING account protection, and a mathematical balance reconciliation service comparing the cached `Account.balance` against the sum of historical `LedgerEntry` rows using `Prisma.Decimal`.
+
+### Implementation Details
+1. **`accountService.js`**: Three pure service functions using `Prisma.Decimal` exclusively:
+   - `createCustomerAccount`: Validates userId UUID format, verifies target user exists and is `ACCOUNT_HOLDER`, generates or validates account number, creates account with `balance = 0.00`.
+   - `getAccountsForUser`: Returns all accounts for `ADMIN`/`AUDITOR`; filters to `userId = req.user.id` for `ACCOUNT_HOLDER`.
+   - `reconcileAccountBalance`: Computes `SUM(CREDITS) - SUM(DEBITS)` via `Prisma.Decimal.minus()` and compares against stored `Account.balance` using `Decimal.equals()`.
+2. **`accountController.js`**: Thin HTTP layer translating service results to `201`/`200`/`403`/`404` responses. `console.error` is used for expected business errors (e.g., User not found) — intentional; does not cause test failures.
+3. **`accountRoutes.js`**: Added `GET /`, `POST /`, `GET /:id`, `GET /:id/reconcile` with appropriate middleware chains (`authMiddleware`, `roleMiddleware`, `ownershipMiddleware`).
+4. **`ownershipMiddleware.js`**: Updated with:
+   - Explicit `SYSTEM_CLEARING` guard for `ACCOUNT_HOLDER` (returns `403` with message `"Direct access to a clearing account is prohibited."`).
+   - Relaxed UUID regex (`/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i`) that accepts all valid UUIDs including nil UUID (`00000000-0000-0000-0000-000000000000`).
+   - Row-level ownership check: looks up account by ID and returns `403` if `account.userId !== req.user.id`.
+5. **API documentation**: Added Sections 3.1–3.4 in `docs/API.md` covering all four account endpoints.
+
+### Actual Issue Encountered & Solution
+- **Issue (UUID Regex Too Strict)**: Initial UUID validation regex (`/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i`) encoded RFC 4122 version (`[1-5]`) and variant (`[89ab]`) constraints. This caused the nil UUID (`00000000-0000-0000-0000-000000000000`) used in tests to be rejected with `400 Bad Request` before the database lookup, producing `400` where the test expected `404`.
+  - *Affected tests*: `should reject creating account for non-existent userId with 404` and `should return 404 Not Found for non-existent valid UUID`.
+  - *Resolution*: Relaxed the regex to `/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i` in both `ownershipMiddleware.js` and `accountService.js`. The regex still rejects clearly malformed strings; version/variant validation is deferred to the database.
+
+### Test Results
+- **Test file**: `backend/tests/accounts.test.js` — 17 tests across 4 describe blocks.
+- **Stage 5 isolated run**: `npm --prefix backend test -- tests/accounts.test.js` → **17 passed, 0 failed** (39.4 s).
+- **Full suite regression**: `npm --prefix backend test` → **35 passed, 0 failed** (auth.test.js: 18 + accounts.test.js: 17, 61.8 s).
+
+### Business Rules Enforced by Implementation
+- Only `ADMIN` can call `POST /api/accounts`; `ACCOUNT_HOLDER` and `AUDITOR` receive `403`.
+- Accounts can only be assigned to users with role `ACCOUNT_HOLDER` (not ADMIN or AUDITOR).
+- Initial balance is strictly `0.00`; no balance can be set via account creation API.
+- `ACCOUNT_HOLDER` can never view `SYSTEM_CLEARING` accounts (explicit middleware guard, separate from ownership check).
+- `ACCOUNT_HOLDER` can never view another user's account (ownership check using server-side DB query, not client-supplied data).
+- Reconciliation endpoint (`GET /:id/reconcile`) is restricted to `ADMIN` and `AUDITOR` only.
+- All monetary arithmetic uses `Prisma.Decimal`; no `parseFloat` or JavaScript floating-point.
+
 

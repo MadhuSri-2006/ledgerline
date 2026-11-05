@@ -186,21 +186,163 @@ Allows an Admin to provision new users with assigned roles.
 
 ---
 
-## 3. Account Access & Ownership Endpoints (Preview)
+## 3. Account Management & Balance Endpoints
 
-### 3.1 View Account by ID
-Returns account information. Enforces ownership:
-- `ACCOUNT_HOLDER` can only view their own accounts.
-- `ADMIN` and `AUDITOR` can view all accounts.
+### 3.1 List Accounts
+Retrieves accounts based on caller role:
+- `ADMIN` & `AUDITOR`: View all customer accounts.
+- `ACCOUNT_HOLDER`: Strictly views own accounts (BOLA isolated; never sees other users or clearing accounts).
+
+- **Method**: `GET`
+- **Path**: `/accounts`
+- **Auth Required**: Yes
+- **Responses**:
+  - `200 OK` (when called by Account Holder):
+    ```json
+    {
+      "accounts": [
+        {
+          "id": "account-uuid",
+          "accountNumber": "ACC-ALICE-001",
+          "type": "STANDARD",
+          "balance": "1000.00",
+          "currency": "INR",
+          "status": "ACTIVE",
+          "createdAt": "2026-11-05T14:33:30.000Z"
+        }
+      ]
+    }
+    ```
+
+---
+
+### 3.2 Create Customer Account
+Admin endpoint to provision a new customer account for an existing `ACCOUNT_HOLDER` user. Initial balance is strictly 0.00 Decimal.
+
+- **Method**: `POST`
+- **Path**: `/accounts`
+- **Auth Required**: Yes (`ADMIN` role only)
+- **Request Body**:
+  ```json
+  {
+    "userId": "user-uuid",
+    "currency": "INR",
+    "accountNumber": "ACC-BOB-002"
+  }
+  ```
+- **Responses**:
+  - `201 Created`:
+    ```json
+    {
+      "message": "Account created successfully.",
+      "account": {
+        "id": "new-account-uuid",
+        "accountNumber": "ACC-BOB-002",
+        "type": "STANDARD",
+        "balance": "0.00",
+        "currency": "INR",
+        "status": "ACTIVE",
+        "user": {
+          "id": "user-uuid",
+          "email": "bob@ledgerline.internal",
+          "fullName": "Bob AccountHolder"
+        }
+      }
+    }
+    ```
+  - `400 Bad Request` (Attempting to create account for Admin/Auditor):
+    ```json
+    {
+      "error": "Invalid user role 'ADMIN'. Customer accounts can only be assigned to ACCOUNT_HOLDER users."
+    }
+    ```
+  - `403 Forbidden` (Called by non-Admin):
+    ```json
+    {
+      "error": "Forbidden: Access denied. Role 'ACCOUNT_HOLDER' is not authorized for this resource. Required: [ADMIN]"
+    }
+    ```
+
+---
+
+### 3.3 View Account by ID
+Returns details of a specific account. Enforces server-side ownership:
+- `ACCOUNT_HOLDER` can only view accounts they own.
+- `ADMIN` and `AUDITOR` can view any account.
+- `SYSTEM_CLEARING` account is strictly prohibited from being viewed by `ACCOUNT_HOLDER`.
 
 - **Method**: `GET`
 - **Path**: `/accounts/:id`
 - **Auth Required**: Yes
 - **Responses**:
-  - `200 OK`: Account details.
-  - `403 Forbidden` (BOLA prevention when Alice requests Bob's account):
+  - `200 OK`:
+    ```json
+    {
+      "account": {
+        "id": "account-uuid",
+        "accountNumber": "ACC-ALICE-001",
+        "type": "STANDARD",
+        "balance": "1000.00",
+        "currency": "INR",
+        "status": "ACTIVE",
+        "owner": {
+          "id": "user-uuid",
+          "email": "alice@ledgerline.internal",
+          "fullName": "Alice AccountHolder"
+        },
+        "createdAt": "2026-11-05T14:33:30.000Z"
+      }
+    }
+    ```
+  - `400 Bad Request` (Malformed UUID):
+    ```json
+    {
+      "error": "Bad Request: Invalid account ID format. Expected a valid UUID."
+    }
+    ```
+  - `403 Forbidden` (BOLA Attempt):
     ```json
     {
       "error": "Forbidden: You do not have permission to view or operate on this account."
     }
     ```
+  - `404 Not Found`:
+    ```json
+    {
+      "error": "Account not found."
+    }
+    ```
+
+---
+
+### 3.4 Mathematical Balance Reconciliation
+Verifies whether the cached `Account.balance` matches the historical sum of ledger entries ($\sum \text{Credits} - \sum \text{Debits}$).
+
+- **Method**: `GET`
+- **Path**: `/accounts/:id/reconcile`
+- **Auth Required**: Yes (`ADMIN` or `AUDITOR` role)
+- **Responses**:
+  - `200 OK`:
+    ```json
+    {
+      "reconciliation": {
+        "accountId": "account-uuid",
+        "accountNumber": "ACC-ALICE-001",
+        "accountType": "STANDARD",
+        "currency": "INR",
+        "storedBalance": "1000.00",
+        "reconciledBalance": "1000.00",
+        "totalCredits": "1000.00",
+        "totalDebits": "0.00",
+        "discrepancy": "0.00",
+        "isBalanced": true
+      }
+    }
+    ```
+  - `403 Forbidden` (Called by Account Holder):
+    ```json
+    {
+      "error": "Forbidden: Access denied. Role 'ACCOUNT_HOLDER' is not authorized for this resource. Required: [AUDITOR, ADMIN]"
+    }
+    ```
+
