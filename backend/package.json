@@ -10,7 +10,8 @@
     "prisma:validate": "prisma validate",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
-    "seed": "node prisma/seed.js"
+    "seed": "node prisma/seed.js",
+    "verify:seed": "node prisma/verify_seed.js"
   },
   "keywords": [
     "ledger",
