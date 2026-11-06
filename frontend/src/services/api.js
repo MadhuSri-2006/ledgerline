@@ -2,7 +2,11 @@
 // All requests go through the Vite dev server proxy (/api → http://localhost:5000/api)
 // Never store raw passwords or secrets in this module.
 
-const BASE_URL = '/api';
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (import.meta.env.PROD
+    ? 'https://ledgerline-api-5tvi.onrender.com/api'
+    : '/api');
 
 /**
  * Retrieve JWT from localStorage.
