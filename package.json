@@ -1,0 +1,14 @@
+{
+  "name": "ledgerline-root",
+  "version": "1.0.0",
+  "private": true,
+  "description": "LedgerLine — Secure, Auditable Money-Movement Ledger (Snovasys Fresher Hiring Challenge 2026)",
+  "scripts": {
+    "start:backend": "cd backend && npm start",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "test:backend": "cd backend && npm test",
+    "verify:seed": "cd backend && npm run verify:seed"
+  }
+}

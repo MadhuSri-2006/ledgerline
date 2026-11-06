@@ -5,10 +5,13 @@ const request = require('supertest');
 const jwt = require('jsonwebtoken');
 const app = require('../src/app');
 const prisma = require('../src/config/db');
+const { hasSeparateTestDb } = require('../src/config/db');
 
 jest.setTimeout(30000);
 
-describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
+const describeDb = hasSeparateTestDb ? describe : describe.skip;
+
+describeDb('Stage 4: Authentication & Role-Based Authorization Tests', () => {
   let adminToken;
   let aliceToken;
   let bobToken;
@@ -16,7 +19,20 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
   let aliceAccountId;
   let bobAccountId;
 
+  const createdUserIds = [];
+  const testAuditLogIds = [];
+
   beforeAll(async () => {
+    // Clean up any test users left over from previous runs
+    const existingTestUsers = await prisma.user.findMany({
+      where: { email: { startsWith: 'testuser-' } },
+      select: { id: true },
+    });
+    for (const u of existingTestUsers) {
+      await prisma.auditLog.deleteMany({ where: { userId: u.id } });
+      await prisma.user.deleteMany({ where: { id: u.id } });
+    }
+
     // 1. Obtain tokens by logging in with seeded credentials
     const adminLogin = await request(app)
       .post('/api/auth/login')
@@ -55,6 +71,19 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
   });
 
   afterAll(async () => {
+    // 1. Delete audit logs explicitly created during auth tests
+    if (testAuditLogIds.length > 0) {
+      await prisma.auditLog.deleteMany({
+        where: { id: { in: testAuditLogIds } },
+      });
+    }
+
+    // 2. Delete test-created users and any dependent audit logs
+    for (const userId of createdUserIds) {
+      await prisma.auditLog.deleteMany({ where: { userId } });
+      await prisma.user.deleteMany({ where: { id: userId } });
+    }
+
     await prisma.$disconnect();
   });
 
@@ -116,6 +145,7 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
       });
 
       expect(auditLog).not.toBeNull();
+      if (auditLog) testAuditLogIds.push(auditLog.id);
       expect(auditLog.reason).toBe('Failed login attempt: Account does not exist.');
       expect(auditLog.reason).not.toContain(sensitivePasswordLikeInput);
       expect(JSON.stringify(auditLog.metadata || {})).not.toContain(sensitivePasswordLikeInput);
@@ -215,6 +245,9 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
       expect(res.status).toBe(201);
       expect(res.body.user.email).toBe(testEmail);
       expect(res.body.user.role).toBe('ACCOUNT_HOLDER');
+      if (res.body.user && res.body.user.id) {
+        createdUserIds.push(res.body.user.id);
+      }
     });
   });
 
@@ -249,6 +282,7 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
         orderBy: { timestamp: 'desc' },
       });
       expect(auditEntry).not.toBeNull();
+      if (auditEntry) testAuditLogIds.push(auditEntry.id);
       expect(auditEntry.status).toBe('DECLINED');
     });
 
@@ -288,6 +322,7 @@ describe('Stage 4: Authentication & Role-Based Authorization Tests', () => {
         orderBy: { timestamp: 'desc' },
       });
       expect(auditEntry).not.toBeNull();
+      if (auditEntry) testAuditLogIds.push(auditEntry.id);
       expect(auditEntry.status).toBe('DECLINED');
     });
   });

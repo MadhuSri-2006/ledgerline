@@ -16,6 +16,10 @@ This document identifies potential security threats, financial integrity vulnera
 | **THREAT-06** | **Audit Trail Evasion** | A failed or unauthorized transaction attempt is lost because the enclosing database transaction was rolled back. | **Medium** | Independent audit recording outside the money-movement transaction. Even when a ledger transaction aborts, the declined attempt is persistently committed to `AuditLog`. |
 | **THREAT-07** | **Token Tampering** | An attacker modifies their JWT payload to change their `role` to `ADMIN` or `userId` to a target account holder. | **Critical** | HMAC-SHA256 signature verification using a strong secret (`JWT_SECRET`). If the payload is tampered with, signature verification fails and request is rejected (`401 Unauthorized`). |
 | **THREAT-08** | **Floating-Point Drift** | Standard IEEE 754 floating-point math (`0.1 + 0.2 = 0.30000000000000004`) introducing fractional penny errors over time. | **High** | PostgreSQL `DECIMAL(14, 2)` mapped through Prisma's `Decimal` type, guaranteeing exact two-decimal precision. |
+| **THREAT-09** | **Deadlock in Cross-Transfers** | Concurrent transfers between two accounts (A -> B and B -> A) lock rows in opposite order, triggering database deadlocks. | **High** | Lexicographical UUID lock ordering: `[id1, id2].sort()` ensures locks are always acquired in strictly identical order across all concurrent transactions. |
+| **THREAT-10** | **Idempotency Payload Mutation** | Client reuses a completed idempotency key but alters the amount or destination to replay a different action. | **High** | Request payload SHA-256 hash comparison: if stored hash differs from incoming payload hash, reject with `422 Unprocessable Entity`. |
+| **THREAT-11** | **Direct Clearing Account Manipulation** | An actor targets `SYS-CLEARING-001` directly in transfer or customer deposit routes. | **Critical** | Strict guards in `fetchActiveCustomerAccount` and `transfer` reject `type === 'SYSTEM_CLEARING'` with `400 Bad Request`. |
+| **THREAT-12** | **Self-Transfer Balance Recycling** | User transfers funds where source and destination accounts are identical (`fromAccountId === toAccountId`). | **Medium** | Explicit pre-transaction validation rejects identical IDs with `400 Bad Request`. |
 
 ---
 
@@ -44,11 +48,29 @@ This document identifies potential security threats, financial integrity vulnera
   2. Server queries `Account` where `id = fromAccountId`.
   3. If `account.userId !== req.user.id`, the server logs a `DECLINED` attempt to `AuditLog` ("Unauthorized debit attempt") and immediately responds with `403 Forbidden`.
 
+### THREAT-09: Cross-Transfer Deadlock Mitigation
+- **Attack Scenario**: Thread 1 executes Transfer(Alice -> Bob); Thread 2 simultaneously executes Transfer(Bob -> Alice). If Thread 1 locks Alice first and Thread 2 locks Bob first, both wait indefinitely for the other, causing a PostgreSQL deadlock abort (`40P01`).
+- **Defense**: The service executes `const [firstId, secondId] = [fromAccountId, toAccountId].sort()`. Regardless of who is sender or receiver, row locks are acquired in the exact same sorted order.
+
+### THREAT-10: Idempotency Payload Mutation Mitigation
+- **Attack Scenario**: An attacker captures a valid idempotency key from a small deposit (e.g. 10.00 INR) and sends a new request with the same key but amount = 10,000.00 INR to exploit cached responses or bypass limits.
+- **Defense**: The system computes a canonical SHA-256 hash of the critical request parameters. If `record.requestHash !== currentHash`, the API responds with `422 Unprocessable Entity` and aborts.
+
 ---
 
-## Automated Verification Plan
-Each of these threats will be verified with dedicated automated tests in Stage 10:
-- `concurrency.test.js`: Fires simultaneous requests using `Promise.all` to verify zero overdrafts.
-- `idempotency.test.js`: Retries identical requests with the same key and asserts money is deducted only once.
-- `auth.test.js`: Simulates BOLA and role tampering attacks and verifies 401/403 responses and persistent audit entries.
-- `ledger.test.js`: Asserts double-entry conservation ($\sum \text{Debit} - \sum \text{Credit} = 0$).
+## Automated Verification Status
+- **`backend/tests/auth.test.js`** (18 tests):
+  - CWE-532 log sanitization, JWT expiration, role escalation prevention, tamper detection.
+- **`backend/tests/accounts.test.js`** (17 tests):
+  - BOLA/IDOR prevention, admin provisioning, role-scoped account filtering, mathematical balance reconciliation.
+- **`backend/tests/transactions.test.js`** (40 tests):
+  - THREAT-01 (simultaneous double-spend concurrency test with `Promise.all`).
+  - THREAT-02 (idempotency key replay test returning cached body without second debit).
+  - THREAT-03 (account ownership enforcement rejecting deposits/withdrawals/transfers across users).
+  - THREAT-05 (double-entry debit/credit conservation and zero net system balance change).
+  - THREAT-06 (independent `AuditLog` persistence on declined insufficient-funds attempts).
+  - THREAT-08 (exact `Prisma.Decimal` arithmetic and decimal precision limits).
+  - THREAT-09 (deadlock-free deterministic UUID row locking).
+  - THREAT-10 (422 rejection on idempotency key payload mismatch).
+  - THREAT-11 (rejection of direct deposits/withdrawals/transfers targeting `SYSTEM_CLEARING`).
+  - THREAT-12 (rejection of self-transfers).

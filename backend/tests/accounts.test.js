@@ -4,10 +4,13 @@ require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const request = require('supertest');
 const app = require('../src/app');
 const prisma = require('../src/config/db');
+const { hasSeparateTestDb } = require('../src/config/db');
 
 jest.setTimeout(30000);
 
-describe('Stage 5: Account Management & Balance Viewing Tests', () => {
+const describeDb = hasSeparateTestDb ? describe : describe.skip;
+
+describeDb('Stage 5: Account Management & Balance Viewing Tests', () => {
   let adminToken;
   let aliceToken;
   let bobToken;
@@ -20,6 +23,8 @@ describe('Stage 5: Account Management & Balance Viewing Tests', () => {
   let aliceAccountId;
   let bobAccountId;
   let clearingAccountId;
+  let aliceOriginalBalance;
+  let bobOriginalBalance;
 
   beforeAll(async () => {
     // 1. Obtain tokens by logging in with demo credentials
@@ -56,15 +61,47 @@ describe('Stage 5: Account Management & Balance Viewing Tests', () => {
     // 3. Fetch Seeded Account IDs
     const aliceAcc = await prisma.account.findUnique({ where: { accountNumber: 'ACC-ALICE-001' } });
     aliceAccountId = aliceAcc.id;
+    aliceOriginalBalance = aliceAcc.balance.toFixed(2);
 
     const bobAcc = await prisma.account.findUnique({ where: { accountNumber: 'ACC-BOB-001' } });
     bobAccountId = bobAcc.id;
+    bobOriginalBalance = bobAcc.balance.toFixed(2);
 
     const clearingAcc = await prisma.account.findUnique({ where: { accountNumber: 'SYS-CLEARING-001' } });
     clearingAccountId = clearingAcc.id;
+
+    // Clean up any test accounts left over from previous runs
+    const existingTestAccounts = await prisma.account.findMany({
+      where: {
+        accountNumber: { notIn: ['ACC-ALICE-001', 'ACC-BOB-001', 'SYS-CLEARING-001'] },
+      },
+      select: { id: true },
+    });
+    for (const a of existingTestAccounts) {
+      await prisma.ledgerEntry.deleteMany({ where: { accountId: a.id } });
+      await prisma.auditLog.deleteMany({ where: { accountId: a.id } });
+      await prisma.account.deleteMany({ where: { id: a.id } });
+    }
   });
 
+  const createdAccountIds = [];
+
   afterAll(async () => {
+    // 1. Delete test-created accounts and their dependent records in correct FK order
+    for (const accId of createdAccountIds) {
+      await prisma.ledgerEntry.deleteMany({ where: { accountId: accId } });
+      await prisma.auditLog.deleteMany({ where: { accountId: accId } });
+      await prisma.account.deleteMany({ where: { id: accId } });
+    }
+
+    // 2. Ensure Alice's balance is restored to its legitimate pre-test balance if tampering test was interrupted
+    if (aliceAccountId && aliceOriginalBalance) {
+      await prisma.account.update({
+        where: { id: aliceAccountId },
+        data: { balance: aliceOriginalBalance },
+      });
+    }
+
     await prisma.$disconnect();
   });
 
@@ -83,6 +120,9 @@ describe('Stage 5: Account Management & Balance Viewing Tests', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.account).toHaveProperty('id');
+      if (res.body.account && res.body.account.id) {
+        createdAccountIds.push(res.body.account.id);
+      }
       expect(res.body.account.type).toBe('STANDARD');
       expect(res.body.account.balance).toBe('0'); // Exact 0 Decimal
       expect(res.body.account.status).toBe('ACTIVE');
@@ -189,7 +229,7 @@ describe('Stage 5: Account Management & Balance Viewing Tests', () => {
       expect(res.body.account).toHaveProperty('currency', 'INR');
       expect(res.body.account).toHaveProperty('status', 'ACTIVE');
       expect(res.body.account).toHaveProperty('balance');
-      expect(parseFloat(res.body.account.balance)).toBe(1000.0);
+      expect(parseFloat(res.body.account.balance)).toBe(parseFloat(aliceOriginalBalance));
     });
 
     it('should reject Account Holder viewing another user account with 403 Forbidden', async () => {
@@ -240,8 +280,8 @@ describe('Stage 5: Account Management & Balance Viewing Tests', () => {
         .set('Authorization', `Bearer ${adminToken}`);
 
       expect(res.status).toBe(200);
-      expect(res.body.reconciliation).toHaveProperty('storedBalance', '1000.00');
-      expect(res.body.reconciliation).toHaveProperty('reconciledBalance', '1000.00');
+      expect(res.body.reconciliation).toHaveProperty('storedBalance', aliceOriginalBalance);
+      expect(res.body.reconciliation).toHaveProperty('reconciledBalance', aliceOriginalBalance);
       expect(res.body.reconciliation).toHaveProperty('isBalanced', true);
       expect(res.body.reconciliation).toHaveProperty('discrepancy', '0.00');
     });
@@ -278,14 +318,17 @@ describe('Stage 5: Account Management & Balance Viewing Tests', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.reconciliation.storedBalance).toBe('9999.00');
-      expect(res.body.reconciliation.reconciledBalance).toBe('1000.00');
+      expect(res.body.reconciliation.reconciledBalance).toBe(aliceOriginalBalance);
       expect(res.body.reconciliation.isBalanced).toBe(false);
-      expect(res.body.reconciliation.discrepancy).toBe('8999.00');
 
-      // 3. Restore Alice's genuine balance back to 1000.00
+      const { Prisma } = require('@prisma/client');
+      const expectedDiscrepancy = new Prisma.Decimal('9999.00').minus(aliceOriginalBalance).toFixed(2);
+      expect(res.body.reconciliation.discrepancy).toBe(expectedDiscrepancy);
+
+      // 3. Restore Alice's genuine balance back to original
       await prisma.account.update({
         where: { id: aliceAccountId },
-        data: { balance: '1000.00' },
+        data: { balance: aliceOriginalBalance },
       });
 
       // 4. Verify it returns isBalanced: true again
