@@ -118,7 +118,7 @@ export default function AuditorDashboard() {
               Compliance & Independent Auditor Portal
             </h3>
             <p style={{ fontSize: '13px', color: '#b45309', marginTop: '2px' }}>
-              Read-Only Governance Mode: Mutation controls are strictly disabled. All accounts and historical ledger entries are cryptographically and mathematically auditable.
+              Read-Only Governance Mode: Viewing permissions only. All account balances and transaction histories are verified for accuracy and compliance.
             </p>
           </div>
         </div>
@@ -132,7 +132,7 @@ export default function AuditorDashboard() {
           {auditingAll ? (
             <>
               <Spinner />
-              <span>Verifying All Ledgers...</span>
+              <span>Verifying All Accounts...</span>
             </>
           ) : (
             '🔬 Run System-Wide Audit'
@@ -175,7 +175,7 @@ export default function AuditorDashboard() {
         <div className="stat-card">
           <div className="stat-card-label">Audited Accounts</div>
           <div className="stat-card-value">{accounts.length}</div>
-          <div className="stat-card-sub">Total ledgers in system</div>
+          <div className="stat-card-sub">Total accounts in system</div>
         </div>
         <div className="stat-card" style={{ borderTop: '3px solid var(--primary)' }}>
           <div className="stat-card-label">Total Customer Holdings</div>
@@ -187,14 +187,14 @@ export default function AuditorDashboard() {
           <div className="stat-card-value" style={{ color: 'var(--danger)' }}>
             {clearingAccount ? formatAmount(clearingAccount.balance, clearingAccount.currency) : 'N/A'}
           </div>
-          <div className="stat-card-sub">Counterpart double-entry reserve</div>
+          <div className="stat-card-sub">System operational reserve</div>
         </div>
       </div>
 
       {/* Accounts Audit Table */}
       <div className="card">
         <div className="card-header">
-          <h2>All Accounts Ledger Registry</h2>
+          <h2>All Accounts Registry</h2>
           <Badge type="yellow">Read-Only</Badge>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -211,7 +211,7 @@ export default function AuditorDashboard() {
                     <th>Type</th>
                     <th>Owner / Entity</th>
                     <th>Currency</th>
-                    <th>Cached Balance</th>
+                    <th>Current Balance</th>
                     <th>Status</th>
                     <th>Audit Verification</th>
                   </tr>
@@ -299,7 +299,7 @@ export default function AuditorDashboard() {
                 </h3>
                 <p style={{ fontSize: '13px', color: reconciliationResult.isBalanced ? '#166534' : '#991b1b', marginTop: '2px' }}>
                   {reconciliationResult.isBalanced
-                    ? 'Cached Account.balance strictly matches historical sum of LedgerEntry debits and credits.'
+                    ? 'The current account balance matches the complete transaction history.'
                     : `Discrepancy: ${reconciliationResult.discrepancy} ${reconciliationResult.currency}`}
                 </p>
               </div>
@@ -316,13 +316,13 @@ export default function AuditorDashboard() {
                   <td>{reconciliationResult.accountType}</td>
                 </tr>
                 <tr>
-                  <td><strong>Stored Balance (Account.balance)</strong></td>
+                  <td><strong>Current Stored Balance</strong></td>
                   <td className="text-mono" style={{ fontWeight: 'bold' }}>
                     {formatAmount(reconciliationResult.storedBalance, reconciliationResult.currency)}
                   </td>
                 </tr>
                 <tr>
-                  <td><strong>Historical Ledger Sum (Credits - Debits)</strong></td>
+                  <td><strong>Calculated Total (Credits - Debits)</strong></td>
                   <td className="text-mono" style={{ fontWeight: 'bold' }}>
                     {formatAmount(reconciliationResult.reconciledBalance, reconciliationResult.currency)}
                   </td>

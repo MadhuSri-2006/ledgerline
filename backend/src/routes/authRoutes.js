@@ -3,6 +3,9 @@ const router = express.Router();
 const authController = require('../controllers/authController');
 const authenticate = require('../middleware/authMiddleware');
 
+// Public route: Register new user
+router.post('/register', authController.register);
+
 // Public route: Login with credentials
 router.post('/login', authController.login);
 

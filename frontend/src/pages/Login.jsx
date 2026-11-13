@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { login as apiLogin } from '../services/api';
-import { Alert, Spinner } from '../components/ui';
+import { Alert, Spinner, EyeIcon, EyeOffIcon } from '../components/ui';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -93,7 +94,7 @@ export default function Login() {
             LedgerLine
           </h1>
           <p style={{ fontSize: '14px', color: 'var(--gray-500)', marginTop: '4px' }}>
-            ACID Double-Entry Financial Banking Ledger
+            Secure & Reliable Digital Banking
           </p>
         </div>
 
@@ -128,16 +129,42 @@ export default function Login() {
               <label className="form-label" htmlFor="login-password">
                 Password <span className="required">*</span>
               </label>
-              <input
-                id="login-password"
-                type="password"
-                className="form-input"
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <input
+                  id="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  className="form-input"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  style={{ paddingRight: '42px', width: '100%' }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((prev) => !prev)}
+                  style={{
+                    position: 'absolute',
+                    right: '10px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    background: 'none',
+                    border: 'none',
+                    cursor: 'pointer',
+                    padding: '4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: showPassword ? 'var(--primary)' : 'var(--gray-400)',
+                    borderRadius: '4px',
+                  }}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  title={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOffIcon size={18} /> : <EyeIcon size={18} />}
+                </button>
+              </div>
             </div>
 
             <button
@@ -155,6 +182,26 @@ export default function Login() {
                 <span>Sign In to Account</span>
               )}
             </button>
+
+            <div style={{ marginTop: '16px', textAlign: 'center', fontSize: '14px', color: 'var(--gray-600)' }}>
+              Don't have an account?{' '}
+              <button
+                type="button"
+                onClick={() => navigate('/register')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  padding: 0,
+                  color: 'var(--primary)',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  textDecoration: 'underline',
+                  font: 'inherit',
+                }}
+              >
+                Register here
+              </button>
+            </div>
           </form>
 
           {/* Quick Demo Switcher */}
@@ -212,7 +259,7 @@ export default function Login() {
           color: 'var(--gray-500)',
           textAlign: 'center'
         }}>
-          Protected by Argon/Bcrypt & HMAC-SHA256 JWT Authentication
+          Your money. Your control. Your security.
         </div>
       </div>
     </div>

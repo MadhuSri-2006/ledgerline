@@ -98,7 +98,7 @@ export default function Navbar() {
                 color: 'var(--gray-500)',
                 marginTop: '-3px'
               }}>
-                Secure Financial Ledger
+                Secure Digital Banking
               </span>
             </div>
           </Link>

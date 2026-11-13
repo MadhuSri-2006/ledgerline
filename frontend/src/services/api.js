@@ -61,6 +61,16 @@ async function request(method, path, body = null, extraHeaders = {}) {
 // Auth
 // ---------------------------------------------------------------------------
 
+export async function register(fullName, email, password) {
+  const data = await request('POST', '/auth/register', { fullName, email, password });
+  // Store token and user in localStorage following existing convention
+  if (data.token) {
+    localStorage.setItem('ll_token', data.token);
+    localStorage.setItem('ll_user', JSON.stringify(data.user));
+  }
+  return data;
+}
+
 export async function login(email, password) {
   const data = await request('POST', '/auth/login', { email, password });
   // Store token in localStorage

@@ -100,7 +100,7 @@ export default function AccountHolderDashboard() {
     if (amountErr) { setError(amountErr); return; }
     if (!selectedAccountId) { setError('Please select a source account.'); return; }
     if (!targetAccountId || !targetAccountId.trim()) {
-      setError('Please enter the destination account UUID.');
+      setError('Please enter the destination account ID.');
       return;
     }
     if (selectedAccountId === targetAccountId.trim()) {
@@ -141,8 +141,8 @@ export default function AccountHolderDashboard() {
     setConfirmModal({
       isOpen: true,
       type: 'DEPOSIT',
-      title: 'Confirm External Deposit',
-      message: `Deposit ${formatAmount(amount, currentAccount?.currency)} into ${currentAccount?.accountNumber}? Funds will be credited immediately through the clearing settlement.`,
+      title: 'Confirm Deposit',
+      message: `Deposit ${formatAmount(amount, currentAccount?.currency)} into ${currentAccount?.accountNumber}? Funds will be credited immediately to your account.`,
       payload: {
         accountId: selectedAccountId,
         amount: parseFloat(amount).toFixed(2),
@@ -263,7 +263,7 @@ export default function AccountHolderDashboard() {
             Welcome back, {user?.fullName || 'Account Holder'}
           </h1>
           <p style={{ color: 'var(--gray-500)', fontSize: '14px', marginTop: '4px' }}>
-            Manage your accounts and execute secure double-entry transfers.
+            Manage your accounts and transfer funds securely.
           </p>
         </div>
         <div style={{
@@ -353,7 +353,7 @@ export default function AccountHolderDashboard() {
                           </div>
                           {/* Show Account ID for use in transfers */}
                           <span
-                            title="Account UUID — copy this to send transfers to this account"
+                            title="Account ID — copy this to receive transfers into this account"
                             style={{ fontSize: '11px', color: 'var(--gray-400)', fontFamily: 'var(--font-mono)', display: 'block', marginTop: '4px' }}
                           >
                             {acc.id}
@@ -374,7 +374,7 @@ export default function AccountHolderDashboard() {
               )}
             </div>
             <div className="card-footer" style={{ fontSize: '12px', color: 'var(--gray-500)' }}>
-              🔒 Balances enforced by PostgreSQL double-entry with zero overdraft tolerance.
+              🔒 Protected by real-time balance verification and strict overdraft protection.
             </div>
           </div>
         </div>
@@ -412,21 +412,21 @@ export default function AccountHolderDashboard() {
 
                   <div className="form-group">
                     <label className="form-label" htmlFor="tx-to-acc">
-                      Destination Account UUID <span className="required">*</span>
+                      Destination Account ID <span className="required">*</span>
                     </label>
                     <input
                       id="tx-to-acc"
                       type="text"
                       className="form-input"
-                      placeholder="Paste destination account UUID here"
+                      placeholder="Paste destination account ID here"
                       value={targetAccountId}
                       onChange={(e) => setTargetAccountId(e.target.value)}
                       required
                       pattern="[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}"
-                      title="Must be a valid UUID (e.g. 4eb96075-6828-4673-c40d-3d074077bfb7)"
+                      title="Must be a valid Account ID (e.g. 4eb96075-6828-4673-c40d-3d074077bfb7)"
                     />
                     <p className="form-hint">
-                      Copy the destination account's UUID from the account card above. Self-transfers are rejected.
+                      Copy the recipient's Account ID. Transfers to the same account are not permitted.
                     </p>
                   </div>
 
@@ -507,7 +507,7 @@ export default function AccountHolderDashboard() {
                       onChange={(e) => setAmount(e.target.value)}
                       required
                     />
-                    <p className="form-hint">Funds drawn from the banking settlement clearing account.</p>
+                    <p className="form-hint">Funds will be securely credited to your selected account.</p>
                   </div>
 
                   <div className="form-group">
@@ -570,7 +570,7 @@ export default function AccountHolderDashboard() {
                       onChange={(e) => setAmount(e.target.value)}
                       required
                     />
-                    <p className="form-hint">Overdrafts are atomically rejected. Max: {formatAmount(currentAccount?.balance, currentAccount?.currency)}.</p>
+                    <p className="form-hint">Overdraft protection is active. Maximum withdrawal: {formatAmount(currentAccount?.balance, currentAccount?.currency)}.</p>
                   </div>
 
                   <div className="form-group">
@@ -603,8 +603,8 @@ export default function AccountHolderDashboard() {
       {/* Session Transaction Statement */}
       <div className="card" style={{ marginTop: '32px' }}>
         <div className="card-header">
-          <h2>Session Transaction Statement</h2>
-          <Badge type="blue">ACID Confirmed</Badge>
+          <h2>Recent Transaction History</h2>
+          <Badge type="blue">Balance Verified</Badge>
         </div>
         <div className="card-body" style={{ padding: 0 }}>
           {recentTransactions.length === 0 ? (

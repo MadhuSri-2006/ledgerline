@@ -25,7 +25,62 @@ http://localhost:5000/api
 
 ## 1. Authentication Endpoints
 
-### 1.1 Login
+### 1.1 Register
+Registers a new public user with personal credentials, atomically provisions an active primary standard bank account (`0.00 INR`), and issues a signed JWT. Role is strictly assigned as `ACCOUNT_HOLDER` (any role passed in the request is safely ignored to prevent privilege escalation).
+
+- **Method**: `POST`
+- **Path**: `/auth/register`
+- **Auth Required**: No (Public)
+- **Request Body**:
+  ```json
+  {
+    "fullName": "Jane Doe",
+    "email": "jane.doe@example.com",
+    "password": "Password123!"
+  }
+  ```
+- **Validation Rules**:
+  - `fullName`: String, 2 to 100 characters.
+  - `email`: Valid email format, unique in system.
+  - `password`: Minimum 8 characters, containing at least one letter and one number.
+- **Responses**:
+  - `201 Created`:
+    ```json
+    {
+      "message": "Registration successful.",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+      "user": {
+        "id": "c1f7a0b3-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "email": "jane.doe@example.com",
+        "fullName": "Jane Doe",
+        "role": "ACCOUNT_HOLDER",
+        "createdAt": "2026-11-13T12:00:00.000Z"
+      },
+      "account": {
+        "id": "d2e8b1c4-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+        "accountNumber": "ACC-123456-7890",
+        "currency": "INR",
+        "balance": "0.00",
+        "status": "ACTIVE"
+      }
+    }
+    ```
+  - `400 Bad Request`:
+    ```json
+    {
+      "error": "Validation failed: Full name, email, and password are required."
+    }
+    ```
+  - `409 Conflict`:
+    ```json
+    {
+      "error": "An account with this email already exists."
+    }
+    ```
+
+---
+
+### 1.2 Login
 Authenticates an existing user via email and bcrypt password comparison. Issues a signed JWT.
 
 - **Method**: `POST`
@@ -67,7 +122,7 @@ Authenticates an existing user via email and bcrypt password comparison. Issues 
 
 ---
 
-### 1.2 Get Current Authenticated User (`/me`)
+### 1.3 Get Current Authenticated User (`/me`)
 Returns the profile of the user currently authenticated by the Bearer token.
 
 - **Method**: `GET`

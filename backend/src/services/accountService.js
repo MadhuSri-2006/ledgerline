@@ -7,10 +7,18 @@ const prisma = require('../config/db');
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * Creates a new customer account. Restricted to Admin.
+ * Generate a standard random customer account number.
+ */
+function generateAccountNumber() {
+  const randomSuffix = Math.floor(1000 + Math.random() * 9000);
+  return `ACC-${Date.now().toString().slice(-6)}-${randomSuffix}`;
+}
+
+/**
+ * Creates a new customer account. Restricted to Admin or user registration.
  * Initial balance is strictly 0.00 (balances change only via double-entry ledger in Stage 6).
  */
-async function createCustomerAccount({ userId, accountNumber, currency = 'INR', adminUserId }) {
+async function createCustomerAccount({ userId, accountNumber, currency = 'INR', adminUserId }, client = prisma) {
   if (!userId) {
     throw { statusCode: 400, message: 'Validation failed: userId is required.' };
   }
@@ -20,7 +28,7 @@ async function createCustomerAccount({ userId, accountNumber, currency = 'INR', 
   }
 
   // 1. Verify target user exists and is an ACCOUNT_HOLDER
-  const targetUser = await prisma.user.findUnique({
+  const targetUser = await client.user.findUnique({
     where: { id: userId },
   });
 
@@ -38,12 +46,11 @@ async function createCustomerAccount({ userId, accountNumber, currency = 'INR', 
   // 2. Generate or validate account number
   let finalAccountNumber = accountNumber ? accountNumber.trim().toUpperCase() : null;
   if (!finalAccountNumber) {
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    finalAccountNumber = `ACC-${Date.now().toString().slice(-6)}-${randomSuffix}`;
+    finalAccountNumber = generateAccountNumber();
   }
 
   // Check uniqueness
-  const existingAcc = await prisma.account.findUnique({
+  const existingAcc = await client.account.findUnique({
     where: { accountNumber: finalAccountNumber },
   });
 
@@ -52,7 +59,7 @@ async function createCustomerAccount({ userId, accountNumber, currency = 'INR', 
   }
 
   // 3. Create account with exact 0.00 Decimal balance
-  const account = await prisma.account.create({
+  const account = await client.account.create({
     data: {
       accountNumber: finalAccountNumber,
       userId: targetUser.id,
@@ -73,13 +80,15 @@ async function createCustomerAccount({ userId, accountNumber, currency = 'INR', 
   });
 
   // 4. Log audit entry for account creation
-  await prisma.auditLog.create({
+  await client.auditLog.create({
     data: {
-      userId: adminUserId,
+      userId: adminUserId || targetUser.id,
       accountId: account.id,
-      action: 'ADMIN_ACCOUNT_CREATED',
+      action: adminUserId ? 'ADMIN_ACCOUNT_CREATED' : 'ACCOUNT_CREATED',
       status: 'SUCCESS',
-      reason: `Admin created account ${account.accountNumber} for user ${targetUser.email}`,
+      reason: adminUserId
+        ? `Admin created account ${account.accountNumber} for user ${targetUser.email}`
+        : `Primary account ${account.accountNumber} provisioned for user ${targetUser.email}`,
       runningBalance: account.balance,
     },
   });
@@ -171,4 +180,5 @@ module.exports = {
   createCustomerAccount,
   getAccountsForUser,
   reconcileAccountBalance,
+  generateAccountNumber,
 };

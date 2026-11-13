@@ -294,7 +294,7 @@ export default function AdminDashboard() {
         <div className="stat-card">
           <div className="stat-card-label">Customer Accounts</div>
           <div className="stat-card-value">{customerAccounts.length}</div>
-          <div className="stat-card-sub">Active standard ledgers</div>
+          <div className="stat-card-sub">Active customer accounts</div>
         </div>
         <div className="stat-card" style={{ borderTop: '3px solid var(--primary)' }}>
           <div className="stat-card-label">Customer Total Balance</div>
@@ -377,7 +377,7 @@ export default function AdminDashboard() {
                               <span>Checking...</span>
                             </>
                           ) : (
-                            '⚖ Reconcile Ledger'
+                            '⚖ Verify Balance'
                           )}
                         </button>
                       </td>
@@ -578,7 +578,7 @@ export default function AdminDashboard() {
             </div>
 
             <div className="alert alert-info" style={{ marginTop: '16px' }}>
-              🔒 <strong>Invariable Rule:</strong> Customer accounts are always initialized with exactly <code>0.00</code> balance. Balances are credited exclusively through double-entry ledger settlement transactions.
+              🔒 <strong>Account Policy:</strong> New accounts are initialized with a 0.00 balance. Balances update automatically upon verified deposits or transfers.
             </div>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '20px' }}>
@@ -623,12 +623,12 @@ export default function AdminDashboard() {
               <div>
                 <h3 style={{ fontSize: '16px', fontWeight: 'bold', color: reconciliationData.isBalanced ? '#14532d' : '#7f1d1d' }}>
                   {reconciliationData.isBalanced
-                    ? 'Double-Entry Invariant Satisfied: Balanced'
-                    : 'Discrepancy Detected in Ledger Sum!'}
+                    ? 'Balance Verified: All Records Match'
+                    : 'Discrepancy Detected in Account Records!'}
                 </h3>
                 <p style={{ fontSize: '13px', color: reconciliationData.isBalanced ? '#166534' : '#991b1b', marginTop: '2px' }}>
                   {reconciliationData.isBalanced
-                    ? 'Stored Account.balance strictly equals the historical ledger entries sum.'
+                    ? 'The stored balance exactly matches the complete transaction history.'
                     : `Discrepancy detected: ${reconciliationData.discrepancy} ${reconciliationData.currency}`}
                 </p>
               </div>
@@ -645,13 +645,13 @@ export default function AdminDashboard() {
                   <td>{reconciliationData.accountType}</td>
                 </tr>
                 <tr>
-                  <td><strong>Stored Balance (Cached)</strong></td>
+                  <td><strong>Current Stored Balance</strong></td>
                   <td className="text-mono" style={{ fontWeight: 'bold' }}>
                     {formatAmount(reconciliationData.storedBalance, reconciliationData.currency)}
                   </td>
                 </tr>
                 <tr>
-                  <td><strong>Reconciled Balance (Ledger Sum)</strong></td>
+                  <td><strong>Calculated Balance from History</strong></td>
                   <td className="text-mono" style={{ fontWeight: 'bold' }}>
                     {formatAmount(reconciliationData.reconciledBalance, reconciliationData.currency)}
                   </td>
@@ -669,7 +669,7 @@ export default function AdminDashboard() {
                   </td>
                 </tr>
                 <tr>
-                  <td><strong>Mathematical Discrepancy</strong></td>
+                  <td><strong>Discrepancy</strong></td>
                   <td className="text-mono" style={{ color: reconciliationData.discrepancy === '0.00' ? 'inherit' : 'var(--danger)' }}>
                     {reconciliationData.discrepancy} {reconciliationData.currency}
                   </td>
@@ -706,7 +706,7 @@ export default function AdminDashboard() {
                 value={opType}
                 onChange={(e) => setOpType(e.target.value)}
               >
-                <option value="deposit">Deposit Funds (via Clearing Settlement)</option>
+                <option value="deposit">Deposit Funds</option>
                 <option value="transfer">Internal Transfer Between Customer Accounts</option>
               </select>
             </div>

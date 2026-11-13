@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Navbar from './components/Navbar';
 import Login from './pages/Login';
+import Register from './pages/Register';
 import AccountHolderDashboard from './pages/AccountHolderDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import AuditorDashboard from './pages/AuditorDashboard';
@@ -100,7 +101,7 @@ function AppLayout({ children }) {
         color: 'var(--gray-500)',
       }}>
         <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <strong>LedgerLine</strong> — Secure, Auditable Money-Movement Ledger | Snovasys Fresher Hiring Challenge 2026
+          <strong>LedgerLine</strong> — Secure Digital Banking Platform | Snovasys Fresher Hiring Challenge 2026
         </div>
       </footer>
     </div>
@@ -112,12 +113,20 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Public Login Route */}
+          {/* Public Login & Register Routes */}
           <Route
             path="/login"
             element={
               <PublicRoute>
                 <Login />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <Register />
               </PublicRoute>
             }
           />

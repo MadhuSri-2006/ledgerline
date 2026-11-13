@@ -88,6 +88,62 @@ describeDb('Stage 4: Authentication & Role-Based Authorization Tests', () => {
   });
 
   // -------------------------------------------------------------
+  // 0. Public User Registration Tests
+  // -------------------------------------------------------------
+  describe('POST /api/auth/register', () => {
+    const testRegEmail = `testuser-${Date.now()}@example.com`;
+
+    it('should register a new user, atomically provision an account, and return JWT token', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({
+          fullName: 'Test Public User',
+          email: testRegEmail,
+          password: 'TestPassword123!',
+          role: 'ADMIN', // Attempted role escalation
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toHaveProperty('token');
+      expect(res.body.user).toHaveProperty('email', testRegEmail);
+      expect(res.body.user.role).toBe('ACCOUNT_HOLDER'); // Role must be forced to ACCOUNT_HOLDER
+      expect(res.body.user.passwordHash).toBeUndefined(); // Never expose password hash
+      expect(res.body).toHaveProperty('account');
+      expect(res.body.account.status).toBe('ACTIVE');
+      expect(res.body.account.balance).toBe('0.00');
+
+      if (res.body.user.id) {
+        createdUserIds.push(res.body.user.id);
+      }
+    });
+
+    it('should reject registration with duplicate email with 409 Conflict', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({
+          fullName: 'Test Public User 2',
+          email: testRegEmail,
+          password: 'AnotherPassword123!',
+        });
+
+      expect(res.status).toBe(409);
+      expect(res.body.error).toMatch(/already exists/i);
+    });
+
+    it('should reject registration with invalid email or weak password with 400 Bad Request', async () => {
+      const res = await request(app)
+        .post('/api/auth/register')
+        .send({
+          fullName: 'T',
+          email: 'invalid-email',
+          password: 'short',
+        });
+
+      expect(res.status).toBe(400);
+    });
+  });
+
+  // -------------------------------------------------------------
   // 1. Login & Password Verification Tests
   // -------------------------------------------------------------
   describe('POST /api/auth/login', () => {
